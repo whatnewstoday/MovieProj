@@ -134,8 +134,7 @@ elif main_option == "Content-Based":
                 
                 # Get top recommendations
                 top_movie_indices = [i for i, score in unrated_scores[:n_content_recs]]
-                filtered_indices = filter_indices_by_genre(top_movie_indices, selected_genres)
-                st.session_state.content_recs = filtered_indices[:n_content_recs]
+                st.session_state.content_recs = top_movie_indices[:n_content_recs]
             else:
                 st.error("Content-based model not available. Please check contentBased1.py")
     
@@ -165,7 +164,7 @@ elif main_option == "Item-Based CF":
         movie_titles = movies_df['movie_title'].tolist()
         selected_movie = st.selectbox("Select a movie:", movie_titles, key="item_cf_movie")
         
-        similarity_method = st.selectbox("Similarity Method:", ["Cosine Similarity", "Probability Similarity"])
+        
         n_similar = st.slider("Number of similar movies:", 1, 20, 10)
         
         if st.button("Find Similar Movies", key="item_cf"):
@@ -174,11 +173,7 @@ elif main_option == "Item-Based CF":
                 movie_user_matrix = ratings_df.pivot(index='movie_id', columns='user_id', values='rating').fillna(0)
                 
                 # Calculate similarity
-                if similarity_method == "Cosine Similarity":
-                    similarity_matrix = cosine_similarity(movie_user_matrix)
-                else:
-                    # Simple probability-based similarity
-                    similarity_matrix = cosine_similarity(movie_user_matrix)
+                similarity_matrix = cosine_similarity(movie_user_matrix)
                 
                 # Find selected movie ID
                 selected_movie_id = movies_df[movies_df['movie_title'] == selected_movie]['movie_id'].values[0]
