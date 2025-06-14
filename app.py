@@ -29,10 +29,10 @@ cf_model.fit()
 # --- Streamlit UI ---
 st.title("🎬 Movie Recommender System")
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2= st.tabs([
     "🔎 Recommend for User", 
-    "🎞️ Find Similar Movies", 
-    "🎯 Recommend by Content"
+    "🎞️ Find Similar Movies"
+    
 ])
 
 with tab1:
@@ -101,78 +101,4 @@ with tab2:
         except Exception as e:
             st.error(f"🚨 Error occurred: {e}")
 
-with tab3:
-    st.header("🎯 Content-Based Movie Recommendations")
 
-    @st.cache_data
-    def load_cbf_model():
-        # Load data
-        r_cols = ['user_id', 'movie_id', 'rating', 'unix_timestamp']
-        ratings_base = pd.read_csv('data/ml-100k/ua.base', sep='\t', names=r_cols)
-        ratings_test = pd.read_csv('data/ml-100k/ua.test', sep='\t', names=r_cols)
-        ratings = pd.concat([ratings_base, ratings_test], ignore_index=True)
-
-        i_cols = ['movie_id', 'title', 'release_date', 'video_release_date', 'IMDb_URL', 'unknown', 'Action',
-                  'Adventure', 'Animation', "Children's", 'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy',
-                  'Film-Noir', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
-        items = pd.read_csv('data/ml-100k/u.item', sep='|', names=i_cols, encoding='latin-1')
-
-        # Convert to 0-based indexing for consistency
-        ratings['user_id'] -= 1
-        ratings['movie_id'] -= 1
-        items['movie_id'] -= 1
-
-        # TF-IDF from genres
-        genre_matrix = items.iloc[:, -19:].values
-        from sklearn.feature_extraction.text import TfidfTransformer
-        tfidf = TfidfTransformer().fit_transform(genre_matrix).toarray()
-
-        n_users = ratings['user_id'].nunique()
-        from sklearn.linear_model import Ridge
-        d = tfidf.shape[1]
-        W = np.zeros((d, n_users))
-        b = np.zeros((1, n_users))
-
-        for n in range(n_users):
-            user_ratings = ratings[ratings['user_id'] == n]
-            ids = user_ratings['movie_id'].values
-            scores = user_ratings['rating'].values
-            if len(ids) == 0:
-                continue
-            clf = Ridge(alpha=0.01)
-            clf.fit(tfidf[ids], scores)
-            W[:, n] = clf.coef_
-            b[0, n] = clf.intercept_
-
-        Yhat = tfidf @ W + b
-        return Yhat, items, ratings
-
-    Yhat, items_df, ratings_df = load_cbf_model()
-    n_users_cbf = Yhat.shape[1]
-
-    user_id_cbf = st.number_input(
-        "Enter user ID (for CBF):", 
-        min_value=0, 
-        max_value=n_users_cbf - 1, 
-        step=1, 
-        key="cbf_user"
-    )
-    n_recs_cbf = st.slider("Number of content-based recommendations:", 1, 20, 10, key="cbf_slider")
-
-    def recommend_movies_cbf(user_id, Yhat, items, ratings, top_n=10):
-        rated_movies = ratings[ratings['user_id'] == user_id]['movie_id'].tolist()
-        user_pred_scores = Yhat[:, user_id]
-        unseen_ids = [i for i in range(len(user_pred_scores)) if i not in rated_movies]
-        unseen_scores = [(i, user_pred_scores[i]) for i in unseen_ids]
-        unseen_scores.sort(key=lambda x: x[1], reverse=True)
-        top_movies_idx = [i for i, score in unseen_scores[:top_n]]
-        
-        # Use .iloc to select by 0-based index
-        recommended = items.iloc[top_movies_idx][['movie_id', 'title']]
-        return recommended
-
-    if st.button("Recommend (CBF)"):
-        recs = recommend_movies_cbf(user_id_cbf, Yhat, items_df, ratings_df, top_n=n_recs_cbf)
-        st.subheader("📚 Content-Based Recommendations:")
-        for i, row in recs.iterrows():
-            st.write(f"{row['title']}")
